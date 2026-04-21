@@ -1,0 +1,121 @@
+---
+title: "Overfitting Decision Tree Model"
+output: pdf_document
+---
+
+## Overview
+
+This document builds an intentionally overfit decision tree classifier.  
+The goal is to allow the tree to grow with almost no pruning so that we can compare its behavior against the general model.
+
+```{r setup, message=FALSE, warning=FALSE}
+packages <- c("data.table", "rpart", "rpart.plot", "caret")
+
+installed <- rownames(installed.packages())
+for (p in packages) {
+  if (!(p %in% installed)) install.packages(p)
+}
+
+library(data.table)
+library(rpart)
+library(rpart.plot)
+library(caret)
+
+set.seed(571)
+```
+
+## Load the data
+
+Make sure the CSV files are inside a folder called `data` in your project directory.
+
+```{r load-data}
+train <- fread("data/dota2Train.csv", header = FALSE)
+test  <- fread("data/dota2Test.csv", header = FALSE)
+
+colnames(train)[1:4] <- c("result", "clusterid", "gamemode", "gametype")
+colnames(test)[1:4]  <- c("result", "clusterid", "gamemode", "gametype")
+
+hero_names <- paste0("hero", 1:(ncol(train) - 4))
+colnames(train)[5:ncol(train)] <- hero_names
+colnames(test)[5:ncol(test)]   <- hero_names
+
+train$result <- factor(train$result, levels = c(-1, 1), labels = c("loss", "win"))
+test$result  <- factor(test$result, levels = c(-1, 1), labels = c("loss", "win"))
+```
+
+## Fit the overfitting model
+
+This tree is intentionally allowed to grow aggressively:
+- very deep tree
+- tiny split restrictions
+- no practical pruning
+
+```{r fit-overfit}
+overfit_tree <- rpart(
+  result ~ .,
+  data = train,
+  method = "class",
+  control = rpart.control(
+    maxdepth = 30,
+    minsplit = 2,
+    minbucket = 1,
+    cp = 0
+  )
+)
+
+printcp(overfit_tree)
+```
+
+## Plot a simplified display version
+
+The full overfit tree is usually too dense to read clearly.  
+So this section keeps the full overfit model for evaluation, but shows a lightly pruned copy for visualization only.
+
+```{r plot-overfit-tree, fig.width=12, fig.height=8}
+display_tree <- prune(overfit_tree, cp = 0.001)
+
+rpart.plot(
+  display_tree,
+  main = "Simplified View of the Overfitting Tree",
+  cex = 0.6,
+  compress = TRUE,
+  fallen.leaves = TRUE,
+  faclen = 0,
+  varlen = 0
+)
+```
+
+## Evaluate on training and test sets
+
+```{r evaluate-overfit}
+train_pred <- predict(overfit_tree, train, type = "class")
+test_pred  <- predict(overfit_tree, test, type = "class")
+
+train_cm <- confusionMatrix(data = train_pred, reference = train$result, positive = "win")
+test_cm  <- confusionMatrix(data = test_pred, reference = test$result, positive = "win")
+
+cat("Training accuracy:\n")
+print(train_cm$overall["Accuracy"])
+
+cat("\nTest accuracy:\n")
+print(test_cm$overall["Accuracy"])
+
+cat("\nTraining confusion matrix:\n")
+print(train_cm$table)
+
+cat("\nTest confusion matrix:\n")
+print(test_cm$table)
+
+cat("\nFull test confusion matrix statistics:\n")
+print(test_cm)
+```
+
+## Notes
+
+This model is intended to overfit:
+- extremely flexible structure
+- almost no regularization
+- expected to fit the training data much more closely
+- may not improve test-set performance
+
+The tree shown in the figure is a simplified display version so it fits in the PDF more clearly.
