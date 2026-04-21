@@ -6,7 +6,7 @@ output: pdf_document
 ## Overview
 
 This document builds a decision tree classifier that is tuned to favor generalization rather than memorization.  
-A smaller cross-validation grid is used so the file knits faster.
+A moderate cross-validation grid is used to balance the model tuning and run time
 
 ```{r setup, message=FALSE, warning=FALSE}
 packages <- c("data.table", "rpart", "rpart.plot", "caret", "ggplot2")
@@ -47,12 +47,12 @@ test$result  <- factor(test$result, levels = c(-1, 1), labels = c("loss", "win")
 ## Cross-validation over tree settings
 
 To reduce runtime, we search a smaller grid:
-- `maxdepth` values from 3 to 6
+- `maxdepth` values from 3 to 12
 - `cp` values of 0.0005, 0.001, and 0.005
 - 3-fold cross-validation
 
 ```{r cv-search}
-depth_grid <- 3:6
+depth_grid <- 3:12
 cp_grid <- c(0.0005, 0.001, 0.005)
 
 folds <- createFolds(train$result, k = 3, returnTrain = FALSE)
