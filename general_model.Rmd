@@ -1,0 +1,182 @@
+---
+title: "General Decision Tree Model"
+output: pdf_document
+---
+
+## Overview
+
+This document builds a decision tree classifier that is tuned to favor generalization rather than memorization.  
+A smaller cross-validation grid is used so the file knits faster.
+
+```{r setup, message=FALSE, warning=FALSE}
+packages <- c("data.table", "rpart", "rpart.plot", "caret", "ggplot2")
+
+installed <- rownames(installed.packages())
+for (p in packages) {
+  if (!(p %in% installed)) install.packages(p)
+}
+
+library(data.table)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(ggplot2)
+
+set.seed(571)
+```
+
+## Load the data
+
+Make sure the CSV files are inside a folder called `data` in your project directory.
+
+```{r load-data}
+train <- fread("data/dota2Train.csv", header = FALSE)
+test  <- fread("data/dota2Test.csv", header = FALSE)
+
+colnames(train)[1:4] <- c("result", "clusterid", "gamemode", "gametype")
+colnames(test)[1:4]  <- c("result", "clusterid", "gamemode", "gametype")
+
+hero_names <- paste0("hero", 1:(ncol(train) - 4))
+colnames(train)[5:ncol(train)] <- hero_names
+colnames(test)[5:ncol(test)]   <- hero_names
+
+train$result <- factor(train$result, levels = c(-1, 1), labels = c("loss", "win"))
+test$result  <- factor(test$result, levels = c(-1, 1), labels = c("loss", "win"))
+```
+
+## Cross-validation over tree settings
+
+To reduce runtime, we search a smaller grid:
+- `maxdepth` values from 3 to 6
+- `cp` values of 0.0005, 0.001, and 0.005
+- 3-fold cross-validation
+
+```{r cv-search}
+depth_grid <- 3:6
+cp_grid <- c(0.0005, 0.001, 0.005)
+
+folds <- createFolds(train$result, k = 3, returnTrain = FALSE)
+
+results <- data.frame()
+
+for (d in depth_grid) {
+  for (cp_val in cp_grid) {
+
+    fold_acc <- c()
+
+    for (i in seq_along(folds)) {
+      val_idx <- folds[[i]]
+      train_fold <- train[-val_idx]
+      val_fold   <- train[val_idx]
+
+      tree_fit <- rpart(
+        result ~ .,
+        data = train_fold,
+        method = "class",
+        control = rpart.control(
+          maxdepth = d,
+          minsplit = 20,
+          minbucket = 10,
+          cp = cp_val
+        )
+      )
+
+      pred_val <- predict(tree_fit, val_fold, type = "class")
+      acc <- mean(pred_val == val_fold$result)
+      fold_acc <- c(fold_acc, acc)
+    }
+
+    results <- rbind(
+      results,
+      data.frame(
+        maxdepth = d,
+        cp = cp_val,
+        cv_accuracy = mean(fold_acc)
+      )
+    )
+  }
+}
+
+best_row <- results[which.max(results$cv_accuracy), ]
+best_row
+```
+
+## Plot CV accuracy across all trees
+
+```{r cv-plot, fig.width=10, fig.height=6}
+ggplot(results, aes(x = maxdepth, y = cv_accuracy, color = as.factor(cp), group = cp)) +
+  geom_line() +
+  geom_point() +
+  geom_point(
+    data = best_row,
+    aes(x = maxdepth, y = cv_accuracy),
+    inherit.aes = FALSE,
+    size = 4
+  ) +
+  labs(
+    title = "Cross-Validated Accuracy Across Tree Settings",
+    x = "Max Depth",
+    y = "CV Accuracy",
+    color = "cp"
+  )
+```
+
+## Fit the best general tree
+
+```{r fit-best-general}
+best_tree <- rpart(
+  result ~ .,
+  data = train,
+  method = "class",
+  control = rpart.control(
+    maxdepth = best_row$maxdepth,
+    minsplit = 20,
+    minbucket = 10,
+    cp = best_row$cp
+  )
+)
+
+printcp(best_tree)
+```
+
+## Plot the best general tree
+
+```{r plot-best-tree, fig.width=12, fig.height=8}
+rpart.plot(best_tree, main = "Best General Decision Tree")
+```
+
+## Evaluate on training and test sets
+
+```{r evaluate-general}
+train_pred <- predict(best_tree, train, type = "class")
+test_pred  <- predict(best_tree, test, type = "class")
+
+train_cm <- confusionMatrix(data = train_pred, reference = train$result, positive = "win")
+test_cm  <- confusionMatrix(data = test_pred, reference = test$result, positive = "win")
+
+cat("Best hyperparameters:\n")
+print(best_row)
+
+cat("\nTraining accuracy:\n")
+print(train_cm$overall["Accuracy"])
+
+cat("\nTest accuracy:\n")
+print(test_cm$overall["Accuracy"])
+
+cat("\nTraining confusion matrix:\n")
+print(train_cm$table)
+
+cat("\nTest confusion matrix:\n")
+print(test_cm$table)
+
+cat("\nFull test confusion matrix statistics:\n")
+print(test_cm)
+```
+
+## Notes
+
+This model is intended to be the more generalizable tree:
+- moderate depth
+- moderate split restrictions
+- limited pruning search for faster runtime
+- evaluated on unseen test data
