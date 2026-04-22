@@ -110,11 +110,15 @@ text(mat[,1], mat[,2], labels=paste0('k=',k),
 
 ```{r}
 set.seed(42)
-fit.best <- knn(train[,-1], test[,-1], train[,1], k=k[which.min(metric)])
+train.fit <- knn(train[,-1], train[,-1], train[,1], k=k[which.min(metric)])
+test.fit <- knn(train[,-1], test[,-1], train[,1], k=k[which.min(metric)])
 ```
 
 ```{r}
-confusionMatrix(data = fit.best,
+confusionMatrix(data = train.fit,
+                reference = train[,1],
+                positive = 'win')
+confusionMatrix(data = test.fit,
                 reference = test[,1],
                 positive = 'win')
 ```
