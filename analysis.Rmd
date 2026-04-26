@@ -1,0 +1,89 @@
+---
+title: 'Dota 2 Analysis'
+output:
+  pdf_document:
+    latex_engine: xelatex
+    pandoc_args:
+      - '--from=markdown+hard_line_breaks'
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{bm}
+  - \usepackage{pdfpages}
+mainfont: 'Times New Roman'
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  results = 'hold',
+  fig.show = 'hold'
+)
+```
+
+# Preprocessing
+
+---
+
+### Load Data
+
+```{r}
+train <- read.csv('data/dota2Train.csv', sep=',')
+test <- read.csv('data/dota2Test.csv', sep=',')
+```
+
+### Rename and Refactor
+
+```{r}
+names <- c()
+for (i in 1:113) {
+  names <- c(names, paste0('hero', i))
+}
+
+colnames(train) <- c('outcome', 'clusterid', 'gamemode', 'gametype', names)
+colnames(test) <- c('outcome', 'clusterid', 'gamemode', 'gametype', names)
+
+train$outcome <- ifelse(train$outcome == -1, 'loss', 'win')
+train$outcome <- factor(train$outcome, levels = c('win', 'loss'))
+test$outcome <- ifelse(test$outcome == -1, 'loss', 'win')
+test$outcome <- factor(test$outcome, levels = c('win', 'loss'))
+```
+
+# Analysis
+
+---
+
+```{r}
+tro <- table(train$outcome)
+teo <- table(test$outcome)
+
+wins <- c(tro[1], teo[1])
+losses <- c(tro[2], teo[2])
+ratio <- c(tro[1]/tro[2], teo[1]/teo[2])
+
+df <- data.frame(wins, losses, ratio,
+                 row.names=c('train','test'))
+df
+```
+
+```{r}
+pr.out <- prcomp(train[,5:117])
+```
+```{r}
+pve <- pr.out$sdev^2 / sum(pr.out$sdev^2)
+
+plot(pve , xlab="Principal Component",
+     ylab="Proportion of Variance Explained",
+     type = "l")
+points(pve, col='blue', cex=0.4)
+grid()
+
+plot(cumsum(pve) , xlab="Principal Component",
+     ylab="Cumulative Variance Explained",
+     type = "l")
+points(cumsum(pve), col='blue', cex=0.4)
+grid()
+
+round(pve, 5)
+```
+
+
+
