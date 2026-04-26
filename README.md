@@ -71,7 +71,16 @@ All core functions used are part of `R`'s standard library, no external packages
 
 #### Usage
 
-[]
+- Load and preprocess data using `fread(...)` from `data.table`.
+- Rename fields and factorize the response variable using base `R`.
+- Fit constrained and unpruned tree models using `rpart(...)` from `rpart`.
+- Use `rpart.control(...)` from `rpart` to adjust `maxdepth`, `minsplit`, `minbucket`, and `cp`.
+- Use `createFolds(...)` from `caret` to generate cross-validation splits for the general tree.
+- Evaluate candidate tree settings across folds using `predict(...)` from `rpart`.
+- Visualize cross-validation results using `ggplot(...)`, `geom_line()`, and `geom_point()` from            `ggplot2`.
+- Print tree complexity summaries using `printcp(...)` from `rpart`.
+- Visualize fitted trees using `rpart.plot(...)` from `rpart.plot`.
+- Compute train and test validity metrics using `confusionMatrix(...)` from `caret`.
 
 ---
 
